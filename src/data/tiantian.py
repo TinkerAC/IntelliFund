@@ -1,15 +1,4 @@
-#!/usr/bin/python
-# -*- coding: UTF-8 -*-
-"""
-@Author         : Ethan Yan
-@Contact        : yanyuliang6@163.com
-@File           : tiantian.py
-@Time           : 2020/4/6 16:02
-@Desc           : 爬取天天基金的金融数据
-@Method of use  : Just run
-@Software       : PyCharm
-@License        : (C) Copyright 2019-2050, Node Supply Chain Manager Corporation Limited.
-"""
+
 import requests
 import json
 from pymysql import connect
@@ -49,7 +38,7 @@ class PureFinance(object):
         print("初次执行结果：\n{}".format(dictData))
         totalCount = dictData.get("TotalCount")
 
-        sql = """insert into fund(fundname, funddate, NPV, rate) values(%s, %s, %s, %s);"""
+        sql = """insert into fund_history(fund_code, date, NPV, rate) values(%s, %s, %s, %s);"""
         tmpList = list()
 
         pageTotal = totalCount // 20
