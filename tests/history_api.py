@@ -1,10 +1,12 @@
 import re
 import json
+
+import pandas as pd
 import requests
 from pprint import pprint
 
 
-def history_api(fund_code='001938'):
+def test_history_api(fund_code='161603'):
     url = r"http://api.fund.eastmoney.com/f10/lsjz"
     params = {
         'callback': 'jQuery18304038998523093684_1586160530315',
@@ -22,10 +24,8 @@ def history_api(fund_code='001938'):
         headers=headers
     )
     print(response.text)
-    return response
+    return pd.DataFrame(json.loads(re.findall(r'\((.*)\)', response.text)[0]).get('Data', {}).get('LSJZList', {}))
 
 
 if __name__ == '__main__':
-    response = history_api()
-    data_dict = json.loads(re.findall(r'\((.*)\)', response.text)[0])
-    pprint(data_dict)
+    pass

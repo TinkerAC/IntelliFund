@@ -1,1 +1,1 @@
-from .fund_histroy import FundHistoryCrawl
+from .fund_histroy import FundHistoryCrawler
