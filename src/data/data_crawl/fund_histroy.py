@@ -1,115 +1,154 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
+import json
 import pandas as pd
-import requests_cache
-from pandas import DataFrame
-from PIL import Image
-from io import BytesIO
-import base64
-import numpy as np
+from time import sleep
+import logging
+from pymysql import connect, Error
 
-# 初始化缓存
-requests_cache.install_cache('demo_cache', expire_after=36000)
+logging.basicConfig(level=logging.INFO)
 
-options = Options()
-options.add_argument('user-data-dir=C:\\Users\\20586\\AppData\\Local\\Google\\Chrome\\User Data')
-options.add_argument('profile-directory=Default')
-service = Service('chromedriver.exe')
 
-driver = webdriver.Chrome(options=options)
+class FundHistoryCrawl(object):
+    def __init__(self, max_requests_per_second=5):
+        self.conn = connect(host='localhost', port=3306, database='financedb', user='root', password='mysql')
+        self.cursor = self.conn.cursor()
+        self.max_requests_per_second = max_requests_per_second
+        self.semaphore = threading.Semaphore(max_requests_per_second)
 
-#%%
+    def _reset_auto_increment(self):
+        sql_str = "ALTER TABLE fund_history AUTO_INCREMENT = 1;"
+        self.cursor.execute(sql_str)
 
-driver.get('https://www.morningstar.cn/quickrank/default.aspx')
+    def init_database(self, fund_code):
+        self._delete_existing_data(fund_code)
+        self._reset_auto_increment()
+        self.conn.commit()
 
-#%%
+    def _delete_existing_data(self, fund_code):
+        self.cursor.execute("DELETE FROM fund_history WHERE fund_code = %s;", (fund_code,))
 
-def get_gif_as_base64(img_element):
-    script = """
-    function getGifAsBase64(imgElement) {
-        var canvas = document.createElement('canvas');
-        var ctx = canvas.getContext('2d');
-        canvas.width = imgElement.width;
-        canvas.height = imgElement.height;
-        ctx.drawImage(imgElement, 0, 0, imgElement.width, imgElement.height);
-        return canvas.toDataURL('image/gif').split(',')[1];
-    }
+    def do_crawl(self, fund_codes):
+        """
+        查询全部历史净值
+        :return: 查询结果字典，成功或者失败
+        """
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(self._crawl_single_fund, fund_code) for fund_code in fund_codes]
+            results = []
+            for future in as_completed(futures):
+                results.append(future.result())
+            return results
 
-    var imgElement = arguments[0];
-    return getGifAsBase64(imgElement);
-    """
-    return driver.execute_script(script, img_element)
+    def _crawl_single_fund(self, fund_code, page_range: range = None) -> dict:
+        try:
+            total_count = self._fetch_total_count(fund_code)
+            page_total = (total_count + 19) // 20  # 等价于 math.ceil(total_count / 20)
+            logging.info(f"基金代码 {fund_code} 的总页数为 {page_total}")
 
-def parse_table(driver) -> DataFrame:
-    page_source = driver.page_source
-    table = BeautifulSoup(page_source, 'html.parser').find_all('table')[-1]
-    rows = []
-    for row in table.find_all('tr'):
-        cols = []
-        for col in row.find_all(['td', 'th']):
-            img_tag = col.find('img')
-            if img_tag and img_tag.get('src').endswith('.gif'):
-                base64_gif = get_gif_as_base64(driver.find_element_by_xpath(col.img['xpath']))
-                cols.append(base64_gif)
-            else:
-                cols.append(col.get_text().strip())
-        rows.append(cols)
+            if page_range is None:
+                page_range = range(1, page_total + 1)
 
-    df = DataFrame(rows[1:], columns=rows[0])
-    return df[['代码', '基金名称', '基金分类', '晨星评级(三年)', '晨星评级(五年)', '净值日期', '单位净值(元)', '净值日变动(元)', '今年以来回报(%)']]
+            df_tmp = pd.DataFrame()
+            for single_page in page_range:
+                logging.info(f"基金代码 {fund_code} 正在处理第 {single_page} 页数据")
+                page_data = self._fetch_page_data(single_page, fund_code)
+                df_tmp = pd.concat([df_tmp, page_data], ignore_index=True)
+                sleep(1 / self.max_requests_per_second)  # 控制请求频率
 
-df_origin = parse_table(driver)
+            df_tmp = self._merge_info(df_tmp, fund_code)
+            df_tmp = self._clean_data(df_tmp)  # 清洗数据
+            self._insert_data(df_tmp)
 
-#%%
+            return {"fund_code": fund_code, "message": "ok", "status": 200}
+        except Exception as e:
+            logging.error(f"Error with fund_code {fund_code}: {e}")
+            return {"fund_code": fund_code, "message": "error", "status": 400}
 
-def count_star(base64_string: str) -> int:
-    # Convert base64 string to byte stream
-    byte_stream = base64.b64decode(base64_string)
-    image = Image.open(BytesIO(byte_stream))
+    def _merge_info(self, df_data: pd.DataFrame, fund_code: str) -> pd.DataFrame:
+        df_data["fund_code"] = fund_code
+        df = df_data[["fund_code", "FSRQ", "DWJZ", "LJJZ", "JZZZL"]]
+        return df
 
-    # Convert image to RGB array
-    rgb_array = np.array(image)
+    def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        # 确保数值列没有空字符串或非数值字符
+        df['DWJZ'] = pd.to_numeric(df['DWJZ'], errors='coerce')
+        df['LJJZ'] = pd.to_numeric(df['LJJZ'], errors='coerce')
+        df['JZZZL'] = pd.to_numeric(df['JZZZL'], errors='coerce')
+        df = df.fillna(0)  # 用 0 填充 NaN
+        return df
 
-    # Load pattern images and compute their hashes
-    pattern_hashes = {}
-    for i in range(6):
-        pattern_image = Image.open(f'star/{i}.gif')
-        pattern_hash = hash(pattern_image.tobytes())
-        pattern_hashes[pattern_hash] = i
+    def _fetch_total_count(self, fund_code):
+        with self.semaphore:
+            url = f"https://api.fund.eastmoney.com/f10/lsjz"
+            params = {
+                "callback": "jQuery18304038998523093684_1586160530315",
+                "fundCode": fund_code,
+                "pageIndex": 1,
+                "pageSize": 20
+            }
+            header = {"Referer": f"https://fundf10.eastmoney.com/jjjz_{fund_code}.html"}
+            response = requests.get(url, headers=header, params=params)
+            response.raise_for_status()
 
-    # Compute the hash of the input image
-    image_hash = hash(image.tobytes())
+            json_data = json.loads(response.text[41:-1])
+            logging.info(f"基金代码 {fund_code} 初次执行结果：\n{json_data}")
+            return json_data.get("TotalCount")
 
-    # Return the corresponding pattern index or -1 if not found
-    return pattern_hashes.get(image_hash, -1)
+    def _fetch_page_data(self, page, fund_code) -> pd.DataFrame:
+        with self.semaphore:
+            url = f"https://api.fund.eastmoney.com/f10/lsjz"
+            params = {
+                "callback": "jQuery18304038998523093684_1586160530315",
+                "fundCode": fund_code,
+                "pageIndex": page,
+                "pageSize": 20
+            }
+            header = {"Referer": f"https://fundf10.eastmoney.com/jjjz_{fund_code}.html"}
+            response = requests.get(url, headers=header, params=params)
+            response.raise_for_status()
 
-df = df_origin.copy()
-df['晨星评级(三年)'] = df['晨星评级(三年)'].map(count_star)
-df['晨星评级(五年)'] = df['晨星评级(五年)'].map(count_star)
+            json_data = json.loads(response.text[41:-1])
+            list_date_data = json_data.get("Data", {"LSJZList": None}).get("LSJZList")
+            df = pd.DataFrame(list_date_data)
 
-df_star_counted = df
+            # 确认 DataFrame 列名是否与数据库列名匹配，并进行修正
+            expected_columns = ['FSRQ', 'DWJZ', 'LJJZ', 'JZZZL']
+            for col in expected_columns:
+                if col not in df.columns:
+                    df[col] = None  # 添加缺失的列并填充默认值
 
-df_star_counted.to_csv('fund_list_1_300.csv', index=False, encoding='utf-8-sig', mode='w', header=True)
+            return df
 
-#%%
+    def _insert_data(self, df_data: pd.DataFrame):
+        sql = "INSERT INTO fund_data(fund_code, date, nav, c_nav, growth_rate) VALUES(%s, %s, %s, %s, %s);"
+        data = df_data.values.tolist()
+        try:
+            with self.conn.cursor() as cur:
+                cur.executemany(sql, data)
+                self.conn.commit()
+        except Error as e:
+            logging.error(f"Error inserting data: {e}")
+            for row in data:
+                try:
+                    cur.execute(sql, row)
+                except Error as row_error:
+                    logging.error(f"Error inserting row: {row} with error: {row_error}")
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+    def __del__(self):
+        try:
+            self.cursor.close()
+            self.conn.close()
+        except Exception as e:
+            logging.error(f"Error closing connection: {e}")
 
-wait = WebDriverWait(driver, 30)
 
-def save_to_csv(df: DataFrame, path: str):
-    df.to_csv(path, index=False, encoding='utf-8-sig', mode='a')
+if __name__ == "__main__":
+    fund_codes = ["000016", "000033"]
 
-while True:
-    next_page_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="ctl00_cphMain_AspNetPager1"]/a[12]')))
-    next_page_btn.click()
-    df_tmp = parse_table(driver)
-    df_tmp['晨星评级(三年)'] = df_tmp['晨星评级(三年)'].apply(count_star)
-    df_tmp['晨星评级(五年)'] = df_tmp['晨星评级(五年)'].apply(count_star)
-    df_tmp.to_csv('fund_list_1_300.csv', index=False, encoding='utf-8-sig', mode='a', header=False)
+    crawler = FundHistoryCrawl(max_requests_per_second=10)
+    results = crawler.do_crawl(fund_codes)
 
-#%%
+    print(results)
+    print("数据爬取完成！")
