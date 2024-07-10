@@ -9,10 +9,9 @@ from src.utils import draw_fit_curve, de_normalization, eval_func
 
 def predict(fund_code, start_date, end_date):
     # 超参数
-
     batch_size = 64  # 批量大小
     input_size = 7  # 输入特征维度：净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量
-    output_size = 1  # 输出特征维度：次日净值
+    output_size = 7  # 输出特征维度：次日净值
     seq_len = 96  # 序列长度
     hidden_size = 96  # LSTM层神经元数量
     num_layers = 1  # LSTM层数
@@ -25,7 +24,7 @@ def predict(fund_code, start_date, end_date):
     # 模型
     print("---------开始预测---------")
     model = LSTM(input_size, hidden_size, num_layers, output_size).to(device)
-    checkpoint = torch.load('checkpoints/best_model.pt')
+    checkpoint = torch.load(f'checkpoints/{fund_code}.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
 
     predictions = []  # 记录预测值
@@ -37,14 +36,12 @@ def predict(fund_code, start_date, end_date):
         output = model(seq)  # 前向传播
         predictions.append(output.cpu().detach().numpy())
         groundtruths.append(label.cpu().detach().numpy())
-        original_values.append(seq.cpu().detach().numpy()[:, :, 0])  # 只记录净值
 
     print("---------预测完成---------")
 
     # tensor->numpy array
     predictions = np.concatenate(predictions, axis=0)
     groundtruths = np.concatenate(groundtruths, axis=0)
-    original_values = np.concatenate(original_values, axis=0)
 
     # 评估
     eval_func(groundtruths, predictions)
@@ -55,9 +52,18 @@ def predict(fund_code, start_date, end_date):
     groundtruths = de_normalization(groundtruths, test_set.scaler)
 
     # 绘制拟合曲线
-    draw_fit_curve(predictions, groundtruths, fund_code=fund_code)
-    print("------拟合曲线绘制完成------")
+
+    # 绘制拟合曲线
+    for i in range(7):
+        draw_fit_curve(
+            predictions=predictions,
+            groundtruths=groundtruths,
+            fund_code=fund_code,
+            sample_interval=4,
+            sample_times=50,
+            index=i
+        )
 
 
 if __name__ == '__main__':
-    eval()
+    pass

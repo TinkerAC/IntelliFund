@@ -43,7 +43,7 @@ class MyDataset(Dataset):
         merged_data = pd.merge(merged_data, sz_index_data[['date', 'Close', 'Volume']], on='date', how='inner',
                                suffixes=('_sh', '_sz'))
 
-        # 选择特征
+        # 选择特征(净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量)
         self.data = merged_data[['nav', 'c_nav', 'growth_rate', 'Close_sh', 'Volume_sh', 'Close_sz', 'Volume_sz']]
 
         # 归一化
@@ -68,7 +68,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         seq = self.data[idx:idx + self.seq_len, :]
-        label = self.data[idx + self.seq_len, 0]
+        label = self.data[idx + self.seq_len, :]
         return seq, label
 
     def __len__(self):

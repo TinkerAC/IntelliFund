@@ -25,7 +25,7 @@ class LSTM(nn.Module):
         out, _ = self.lstm(x, (h_0, c_0))  # out: (batch_size, seq_len, hidden_size)
 
         # 取最后一个时间步的输出并通过全连接层
-        out = self.fc(out[:, -1, :])  # out: (batch_size, output_size)
+        out = self.fc(out[:, -1, :])
 
         return out
 
@@ -36,8 +36,8 @@ class LSTM(nn.Module):
 
 # 示例用法
 if __name__ == '__main__':
-    input = torch.rand(32, 96, 8)  # 32批量，96的长度，8维度输出
-    model = LSTM(input_size=8, hidden_size=64, num_layers=8, output_size=8)
-    output = model(input)
+    input_tensor = torch.rand(32, 96, 7)  # 32批量，96的长度，7个特征
+    model = LSTM(input_size=7, hidden_size=96, num_layers=1, output_size=1)
+    output = model(input_tensor)
     print(output.shape)
     print(model)

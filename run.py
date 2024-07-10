@@ -1,5 +1,5 @@
 import os
-
+import torch
 from src import train, predict
 
 if __name__ == '__main__':

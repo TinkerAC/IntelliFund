@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from pylab import mpl
+import os
 
 
 # 工具箱，定义各种使用函数
@@ -46,7 +47,6 @@ def de_normalization(predictions: np.ndarray, scaler: MinMaxScaler) -> np.ndarra
     return predictions * (scaler.data_max_[0] - scaler.data_min_[0]) + scaler.data_min_[0]
 
 
-
 def draw_loss_curve(train_losses, valid_losses):
     """绘制loss曲线"""
     epoches = list(range(1, len(train_losses) + 1))  # 设为小时为单位
@@ -58,33 +58,60 @@ def draw_loss_curve(train_losses, valid_losses):
     plt.ylabel('Loss')  # 命名y轴
     plt.title('Loss曲线')  # 命名标题
     plt.legend(loc='upper right')  # 绘制图例
+
+    os.makedirs('figures', exist_ok=True)  # 创建文件夹
     plt.savefig('figures/Loss曲线.png')  # 保存
     plt.close()
 
 
-def draw_fit_curve(predictions, grandtruths, fund_code,type='基金净值'):
+def draw_fit_curve(predictions: np.ndarray,
+                   groundtruths: np.ndarray,
+                   fund_code: str,
+                   sample_interval: int,
+                   sample_times: int,
+                   index: int):
     """
     绘制拟合曲线
     """
+    name_dict = {0: '单位净值',
+                 1: '累计净值',
+                 2: '增长率',
+                 3: '上证收盘价',
+                 4: '上证交易量',
+                 5: '深证收盘价',
+                 6: '深证交易量'
+                 }
+    type_ = name_dict[index]
+
+    if sample_times * sample_interval > len(predictions):
+        sample_times = len(predictions) // sample_interval
+        Warning(f"样本数量不足，已调整为{sample_times}次采样")
+
     # 设置中文字体
     plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体
     plt.rcParams['axes.unicode_minus'] = False  # 解决坐标轴负号显示问题
 
     plt.figure(figsize=(10, 5))
-    time_steps = range(len(predictions))
+    time_steps = list(range(0, sample_times * sample_interval, sample_interval))  # 时间步长
 
-    # 打印数据的维度以进行调试
-    print("Predictions shape:", np.array(predictions).shape)
-    print("Grandtruths shape:", np.array(grandtruths).shape)
-    print("Time steps shape:", np.array(time_steps).shape)
+    predictions = predictions[time_steps, index]  # 选取预测值
+    grandtruths = groundtruths[time_steps, index]  # 选取真实值
 
     plt.plot(time_steps, grandtruths, 'g.--', label='真实值')  # 绘制真实值曲线
     plt.plot(time_steps, predictions, 'r.-', label='预测值')  # 绘制预测值曲线
-    plt.xlabel('Time Step')
-    plt.ylabel(type)
-    plt.legend()
-    plt.title(f'基金{fund_code}净值 预测值 vs 真实值')
-    plt.show()
+    plt.legend(loc='upper right')  # 绘制图例
+    plt.xlabel('时间步长')  # 命名x轴
+
+    if type_ in ['单位净值', '累计净值', '增长率']:
+        plt.ylabel(f"{type_}（元）")  # 命名y轴
+        plt.title(f"基金{fund_code} {type_}拟合曲线")  # 命名标题
+        plt.savefig(f'figures/{fund_code}_{type_}拟合曲线.png')  # 保存
+
+    else:
+        plt.ylabel(f"{type_}")  # 命名y轴
+        plt.title(f"{type_}拟合曲线")
+        plt.savefig(f'figures/{type_}拟合曲线.png')
+    plt.close()
 
 
 def eval_func(actual_y, forecast_y):
@@ -95,6 +122,7 @@ def eval_func(actual_y, forecast_y):
     smape = np.mean(np.abs(forecast_y - actual_y) / (0.5 * (np.abs(actual_y) + np.abs(forecast_y)))) * 100  # SMAPE
 
     # 保存结果
+    os.makedirs('results', exist_ok=True)
     np.savetxt('results/mse.txt', mse.reshape(-1), fmt='%.4f')
     np.savetxt('results/mae.txt', mae.reshape(-1), fmt='%.4f')
     np.savetxt('results/rmse.txt', rmse.reshape(-1), fmt='%.4f')

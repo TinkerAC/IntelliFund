@@ -14,7 +14,7 @@ def train(fund_code='510050'
           end_date='2023-01-01',
           batch_size=64):
     input_size = 7  # 净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量
-    output_size = 1  # 次日净值
+    output_size = 7  # 净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量
     learning_rate = 1e-2
     seq_len = 96
     hidden_size = 96
@@ -36,6 +36,7 @@ def train(fund_code='510050'
     print("----开始在" + str(device) + "上训练------")
     model = LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, output_size=output_size).to(
         device)
+
     criterion = nn.MSELoss()  # 均方误差损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -48,6 +49,7 @@ def train(fund_code='510050'
         model.train()
         train_loss = 0
         for seq, label in train_loader:
+            # print(seq.shape, label.shape)
             seq, label = seq.to(device), label.to(device)
             output = model(seq)  # 前向传播
             loss = criterion(output, label)  # 计算loss
