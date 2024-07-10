@@ -7,29 +7,24 @@ from src.models import LSTM
 from src.utils import draw_fit_curve, de_normalization, eval_func
 
 
-def predict(fund_code, start_date, end_date):
-    # 超参数
-    batch_size = 64  # 批量大小
-    input_size = 7  # 输入特征维度：净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量
-    output_size = 7  # 输出特征维度：次日净值
-    seq_len = 96  # 序列长度
-    hidden_size = 96  # LSTM层神经元数量
-    num_layers = 1  # LSTM层数
-    device = torch.device("cpu")  # "cuda" if torch.cuda.is_available() else "cpu"
-
+def predict(model: LSTM,
+            fund_code: str,
+            seq_len: int = 96,
+            batch_size: int = 64,
+            ):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     # 测试集
-    test_set = MyDataset(fund_code, start_date, end_date, seq_len, type_='test')
+    test_set = MyDataset(fund_code, seq_len, type_='test')
     test_loader = DataLoader(test_set, batch_size=batch_size, drop_last=True)
 
     # 模型
     print("---------开始预测---------")
-    model = LSTM(input_size, hidden_size, num_layers, output_size).to(device)
+    model = model.to(device)
     checkpoint = torch.load(f'checkpoints/{fund_code}.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
 
     predictions = []  # 记录预测值
     groundtruths = []  # 记录真实值
-    original_values = []  # 记录原始值
     # 预测
     for seq, label in tqdm(test_loader):
         seq, label = seq.to(device), label.to(device)
@@ -51,18 +46,7 @@ def predict(fund_code, start_date, end_date):
     predictions = de_normalization(predictions, test_set.scaler)
     groundtruths = de_normalization(groundtruths, test_set.scaler)
 
-    # 绘制拟合曲线
-
-    # 绘制拟合曲线
-    for i in range(7):
-        draw_fit_curve(
-            predictions=predictions,
-            groundtruths=groundtruths,
-            fund_code=fund_code,
-            sample_interval=4,
-            sample_times=50,
-            index=i
-        )
+    return predictions, groundtruths
 
 
 if __name__ == '__main__':

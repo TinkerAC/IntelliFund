@@ -5,27 +5,26 @@ from sklearn.preprocessing import MinMaxScaler
 from sqlalchemy import create_engine
 import pathlib
 from src.utils import normalization, de_normalization
+import math
 
 
 class MyDataset(Dataset):
     def __init__(self, fund_code: str,
-                 start_date: str,
-                 end_date: str,
                  seq_len: int,
                  type_: str,
-                 max_duration: bool = False,
+                 data_set_length: int = None,
                  sh_index_path: str = str(pathlib.Path(__file__).parent.parent.parent / 'data' / 'raw' / 'sh.csv'),
                  sz_index_path: str = str(pathlib.Path(__file__).parent.parent.parent / 'data' / 'raw' / 'sz.csv')):
         self.seq_len = seq_len
 
         # 加载数据
         engine = create_engine('mysql+pymysql://root:mysql@localhost:3306/financedb')
-        if max_duration:
-            query = f'SELECT * FROM fund_data WHERE fund_code = "{fund_code}"'
-        else:
-            query = f'SELECT * FROM fund_data WHERE fund_code = "{fund_code}" AND date >= "{start_date}" AND date <= "{end_date}"'
-        fund_data = pd.read_sql(query, con=engine)
 
+        query = f'SELECT * FROM fund_data WHERE fund_code = "{fund_code}" '
+
+        if data_set_length is not None:
+            query += f'LIMIT {data_set_length}'
+        fund_data = pd.read_sql_query(query, engine)
         sh_index_data = pd.read_csv(sh_index_path)
         sz_index_data = pd.read_csv(sz_index_path)
 

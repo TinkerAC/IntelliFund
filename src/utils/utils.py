@@ -120,20 +120,17 @@ def eval_func(actual_y, forecast_y):
     mae = np.mean(np.abs(forecast_y - actual_y))  # MAE
     rmse = np.sqrt(np.mean((forecast_y - actual_y) ** 2))  # RMSE
     smape = np.mean(np.abs(forecast_y - actual_y) / (0.5 * (np.abs(actual_y) + np.abs(forecast_y)))) * 100  # SMAPE
-
-    # 保存结果
-    os.makedirs('results', exist_ok=True)
-    np.savetxt('results/mse.txt', mse.reshape(-1), fmt='%.4f')
-    np.savetxt('results/mae.txt', mae.reshape(-1), fmt='%.4f')
-    np.savetxt('results/rmse.txt', rmse.reshape(-1), fmt='%.4f')
-    np.savetxt('results/smape.txt', smape.reshape(-1), fmt='%.4f')
+    return mse, mae, rmse, smape
 
 
-"""
-if __name__ == '__main__':
-    # 测试
-    train_loss_list = [0.1, 0.2, 0.3, 0.4, 0.5]
-    valid_loss_list = [0.2, 0.4, 0.6, 0.8, 1.0]
-    epoch_list = [1, 2, 3, 4, 5]
-    draw_loss_curve(train_loss_list, valid_loss_list)
-"""
+def plot_fit_figures(fund_code: str, predictions: np.ndarray, groundtruths: np.ndarray):
+    # 绘制拟合曲线
+    for i in range(7):
+        draw_fit_curve(
+            predictions=predictions,
+            groundtruths=groundtruths,
+            fund_code=fund_code,
+            sample_interval=4,
+            sample_times=60,
+            index=i
+        )
