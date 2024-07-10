@@ -3,6 +3,8 @@ pymysql
 pandas
 selenium
 beautifulsoup4
-numpy
+numpy<2.0.0
 pillow
 tqdm
+torch
+matplotlib
