@@ -5,8 +5,10 @@ import torch.nn as nn
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size):
         super(LSTM, self).__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.output_size = output_size
 
         # 定义LSTM层
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
@@ -29,15 +31,13 @@ class LSTM(nn.Module):
 
     def __str__(self):
         return 'LSTM(input_size=%d, hidden_size=%d, num_layers=%d, output_size=%d)' % (
-            self.lstm.input_size, self.lstm.hidden_size, self.lstm.num_layers, self.fc.out_features)
+            self.input_size, self.hidden_size, self.num_layers, self.output_size)
 
 
+# 示例用法
 if __name__ == '__main__':
-    # 示例模型初始化
-    input_size = 7  # 输入特征维度：净值、累计净值、增长率、上证收盘价、上证交易量、深证收盘价、深证交易量
-    hidden_size = 96  # LSTM层神经元数量
-    num_layers = 1  # LSTM层数
-    output_size = 1  # 输出特征维度：次日净值
-
-    model = LSTM(input_size, hidden_size, num_layers, output_size)
+    input = torch.rand(32, 96, 8)  # 32批量，96的长度，8维度输出
+    model = LSTM(input_size=8, hidden_size=64, num_layers=8, output_size=8)
+    output = model(input)
+    print(output.shape)
     print(model)

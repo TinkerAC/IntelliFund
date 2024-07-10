@@ -34,7 +34,8 @@ def train(fund_code='510050'
         return
 
     print("----开始在" + str(device) + "上训练------")
-    model = LSTM(input_size, hidden_size, num_layers, output_size).to(device)
+    model = LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, output_size=output_size).to(
+        device)
     criterion = nn.MSELoss()  # 均方误差损失函数
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -47,13 +48,13 @@ def train(fund_code='510050'
         model.train()
         train_loss = 0
         for seq, label in train_loader:
-            seq, label = seq.to(device), label.to(device).unsqueeze(1)  # 确保标签形状为 (batch_size, 1)
-            output = model(seq)
-            loss = criterion(output, label)
-            train_loss += loss.item()
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            seq, label = seq.to(device), label.to(device)
+            output = model(seq)  # 前向传播
+            loss = criterion(output, label)  # 计算loss
+            train_loss += loss.item()  # 累计每个批次的loss
+            optimizer.zero_grad()  # 梯度清零
+            loss.backward()  # 计算梯度
+            optimizer.step()  # 反向传播
         train_loss = train_loss / len(train_loader)
         train_losses.append(train_loss)
 
@@ -61,12 +62,13 @@ def train(fund_code='510050'
         with torch.no_grad():
             valid_loss = 0
             for seq, label in valid_loader:
-                seq, label = seq.to(device), label.to(device).unsqueeze(1)  # 确保标签形状为 (batch_size, 1)
+                seq, label = seq.to(device), label.to(device)
                 output = model(seq)
                 loss = criterion(output, label)
                 valid_loss += loss.item()
             valid_loss = valid_loss / len(valid_loader)
             valid_losses.append(valid_loss)
+            # 寻找在验证集上loss最小的模型
             if valid_loss < min_valid_loss:
                 min_valid_loss = valid_loss
                 best_model = copy.deepcopy(model)
