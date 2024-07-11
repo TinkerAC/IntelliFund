@@ -1,4 +1,4 @@
-from src.models import LSTM
+from src.lstm import LSTM
 import copy
 import torch
 import torch.nn as nn

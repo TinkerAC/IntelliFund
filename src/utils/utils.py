@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+
+
 from pylab import mpl
 import os
 
@@ -131,6 +133,7 @@ def plot_fit_figures(fund_code: str, predictions: np.ndarray, groundtruths: np.n
             groundtruths=groundtruths,
             fund_code=fund_code,
             sample_interval=4,
-            sample_times=60,
+            sample_times=9999,
             index=i
         )
+    return
